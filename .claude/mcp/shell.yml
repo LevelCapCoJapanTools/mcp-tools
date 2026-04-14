@@ -1,0 +1,86 @@
+name: shell_execute
+description: |
+  シェルコマンドを制御された環境（sandbox）で実行する。
+  許可リスト（allow_list）に含まれるコマンドのみ実行可能。
+  任意コマンド実行は禁止。
+
+input_schema:
+  type: object
+  required:
+    - command
+    - args
+  properties:
+    command:
+      type: string
+      description: 実行するコマンド（allow_list 内のみ許可）
+      enum:
+        - cat
+        - echo
+        - find
+        - grep
+        - ls
+        - pwd
+        - wc
+    args:
+      type: array
+      items:
+        type: string
+      description: コマンドへの引数リスト
+      maxItems: 10
+    working_dir:
+      type: string
+      description: 作業ディレクトリ（sandbox_dir 配下のみ）
+      default: /workspace
+
+output_schema:
+  type: object
+  required:
+    - exit_code
+    - stdout
+    - stderr
+  properties:
+    stdout:
+      type: string
+      description: 標準出力
+    stderr:
+      type: string
+      description: 標準エラー出力
+    exit_code:
+      type: integer
+      description: 終了コード
+
+execution:
+  type: shell
+  sandbox: true
+  sandbox_dir: /workspace
+  allow_list:
+    - cat
+    - echo
+    - find
+    - grep
+    - ls
+    - pwd
+    - wc
+  deny_all_unlisted: true
+
+permissions:
+  read: true
+  write: false
+  network: false
+  sandbox_dir: /workspace
+
+timeout:
+  seconds: 30
+  action: kill
+
+errors:
+  - code: COMMAND_NOT_ALLOWED
+    description: allow_list 外のコマンドは実行不可。403 を返して即時終了する。
+  - code: SANDBOX_VIOLATION
+    description: sandbox_dir 外へのアクセス試行。403 を返して即時終了する。
+  - code: INVALID_ARGS
+    description: 引数が不正（maxItems 超過など）。実行前に 400 を返す。
+  - code: TIMEOUT
+    description: seconds 超過時にプロセスを強制終了し 408 を返す。
+  - code: EXECUTION_ERROR
+    description: コマンド実行中の予期せぬエラー。500 を返してログに記録する。

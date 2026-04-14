@@ -1,0 +1,4 @@
+include:
+  - .claude/mcp/shell.yml
+  - .claude/mcp/filesystem.yml
+  - docs/mcp/**
