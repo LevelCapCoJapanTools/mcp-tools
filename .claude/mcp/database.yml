@@ -24,10 +24,10 @@ input_schema:
       type: array
       description: クエリパラメータ（バインディング値）
       items:
-        type:
-          - string
-          - number
-          - "null"
+        oneOf:
+          - type: string
+          - type: number
+          - type: null
       maxItems: 50
     max_rows:
       type: integer

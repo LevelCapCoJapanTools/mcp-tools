@@ -18,8 +18,13 @@ input_schema:
         - stat
     path:
       type: string
-      description: 対象パス（sandbox_dir からの相対パス。先頭 / および .. 禁止）
-      pattern: "^[^./][^.]{0,}$|^[^/].*$"
+      # 先頭 / および内部の / を禁止（絶対パス排除）かつ .. を禁止（パストラバーサル排除）
+      # sandbox_dir の直下エントリ名のみ受け付ける（サブディレクトリ区切りも拒否）
+      pattern: "^(?!/)(?!.*/)(?!.*\\.\\.).*$"
+      description: >
+        対象パス（sandbox_dir からの直下エントリ名のみ）。
+        先頭 / による絶対パス、パス内の / によるサブディレクトリ指定、
+        および .. によるパストラバーサルは実行前に INVALID_PATH エラーで拒否する。
     encoding:
       type: string
       description: テキストファイル読み取り時の文字エンコーディング
