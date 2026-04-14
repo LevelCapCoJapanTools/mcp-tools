@@ -1,0 +1,110 @@
+name: database_query
+description: |
+  許可されたデータベースに対して読み取り専用クエリを実行する。
+  書き込み操作（INSERT/UPDATE/DELETE/DROP 等）は禁止。
+  接続情報はすべて環境変数経由で注入し、ペイロードに直接記載しない。
+  クエリはパラメータバインディングを必須とし、動的 SQL 文字列連結を禁止する。
+
+input_schema:
+  type: object
+  required:
+    - db_env
+    - query
+  properties:
+    db_env:
+      type: string
+      description: 接続情報を保持する環境変数名（値そのものは受け取らない）
+    query:
+      type: string
+      description: |
+        実行する SQL クエリ（SELECT のみ許可）。
+        パラメータは parameters フィールドで渡す。クエリ内の動的文字列連結は禁止。
+      maxLength: 4096
+    parameters:
+      type: array
+      description: クエリパラメータ（バインディング値）
+      items:
+        type:
+          - string
+          - number
+          - "null"
+      maxItems: 50
+    max_rows:
+      type: integer
+      description: 取得行数上限
+      minimum: 1
+      maximum: 1000
+      default: 100
+
+output_schema:
+  type: object
+  required:
+    - columns
+    - rows
+    - row_count
+  properties:
+    columns:
+      type: array
+      description: カラム名一覧
+      items:
+        type: string
+    rows:
+      type: array
+      description: 取得行データ
+      items:
+        type: array
+    row_count:
+      type: integer
+      description: 取得行数
+    truncated:
+      type: boolean
+      description: max_rows で切り詰めた場合 true
+
+execution:
+  type: database
+  allowed_statements:
+    - SELECT
+  deny_keywords:
+    - INSERT
+    - UPDATE
+    - DELETE
+    - DROP
+    - TRUNCATE
+    - ALTER
+    - CREATE
+    - GRANT
+    - REVOKE
+    - EXEC
+    - EXECUTE
+  require_parameter_binding: true
+  read_only_connection: true
+
+permissions:
+  read: true
+  write: false
+  network: false
+  db_access: read_only
+
+timeout:
+  seconds: 30
+  action: cancel_query
+
+errors:
+  - code: STATEMENT_NOT_ALLOWED
+    description: SELECT 以外の SQL 文。403 を返して実行前に終了する。
+  - code: DENY_KEYWORD_DETECTED
+    description: deny_keywords に含まれるキーワードを検出。403 を返して実行前に終了する。
+  - code: DB_ENV_NOT_FOUND
+    description: db_env に指定した環境変数が存在しない。401 を返す。
+  - code: QUERY_TOO_LONG
+    description: クエリが maxLength を超過。400 を返して実行前に終了する。
+  - code: PARAMETER_LIMIT_EXCEEDED
+    description: parameters が maxItems を超過。400 を返して実行前に終了する。
+  - code: ROW_LIMIT_EXCEEDED
+    description: max_rows を超える結果を返そうとした場合、切り詰めて truncated=true を付与する。
+  - code: TIMEOUT
+    description: seconds 超過時にクエリをキャンセルし 408 を返す。
+  - code: CONNECTION_ERROR
+    description: DB 接続失敗。502 を返してログに記録する（接続情報はログに含めない）。
+  - code: QUERY_ERROR
+    description: クエリ実行中の DB エラー。500 を返してログに記録する。

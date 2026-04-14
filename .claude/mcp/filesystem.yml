@@ -1,0 +1,118 @@
+name: filesystem_read
+description: |
+  sandbox_dir 配下のファイル・ディレクトリに対して読み取り操作を行う。
+  書き込みは禁止。パストラバーサル（../）は入力検証で拒否する。
+
+input_schema:
+  type: object
+  required:
+    - operation
+    - path
+  properties:
+    operation:
+      type: string
+      description: 実行する操作
+      enum:
+        - read_file
+        - list_dir
+        - stat
+    path:
+      type: string
+      description: 対象パス（sandbox_dir からの相対パス。先頭 / および .. 禁止）
+      pattern: "^[^./][^.]{0,}$|^[^/].*$"
+    encoding:
+      type: string
+      description: テキストファイル読み取り時の文字エンコーディング
+      enum:
+        - utf-8
+        - utf-16
+      default: utf-8
+    max_size_bytes:
+      type: integer
+      description: 読み取り上限バイト数
+      minimum: 1
+      maximum: 10485760
+      default: 1048576
+
+output_schema:
+  type: object
+  required:
+    - operation
+    - path
+  properties:
+    operation:
+      type: string
+      description: 実行した操作
+    path:
+      type: string
+      description: 対象パス（sandbox_dir からの相対パス）
+    content:
+      type: string
+      description: read_file 時のファイル内容
+    entries:
+      type: array
+      description: list_dir 時のエントリ一覧
+      items:
+        type: object
+        required:
+          - name
+          - type
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+            enum:
+              - file
+              - directory
+              - symlink
+    stat:
+      type: object
+      description: stat 時のファイル情報
+      properties:
+        size_bytes:
+          type: integer
+        is_file:
+          type: boolean
+        is_directory:
+          type: boolean
+        modified_at:
+          type: string
+          format: date-time
+
+execution:
+  type: filesystem
+  sandbox: true
+  sandbox_dir: /workspace
+  allowed_operations:
+    - read_file
+    - list_dir
+    - stat
+  write_enabled: false
+  follow_symlinks: false
+
+permissions:
+  read: true
+  write: false
+  network: false
+  sandbox_dir: /workspace
+
+timeout:
+  seconds: 10
+  action: abort
+
+errors:
+  - code: PATH_TRAVERSAL
+    description: ../ または絶対パスによる sandbox_dir 外へのアクセス試行。403 を返して即時終了する。
+  - code: FILE_NOT_FOUND
+    description: 指定パスが存在しない。404 を返す。
+  - code: SIZE_LIMIT_EXCEEDED
+    description: max_size_bytes を超えるファイルの読み取り試行。413 を返す。
+  - code: PERMISSION_DENIED
+    description: 読み取り権限がない。403 を返す。
+  - code: INVALID_PATH
+    description: パスの形式が不正（先頭 / や .. を含む）。400 を返して実行前に終了する。
+  - code: TIMEOUT
+    description: seconds 超過時に操作を中断し 408 を返す。
+  - code: IO_ERROR
+    description: I/O 操作中の予期せぬエラー。500 を返してログに記録する。

@@ -1,0 +1,102 @@
+name: http_request
+description: |
+  許可されたエンドポイントに対して HTTP リクエストを送信する。
+  allow_hosts に含まれないホストへのリクエストは禁止。
+  認証情報はすべて環境変数経由で注入し、ペイロードに直接記載しない。
+
+input_schema:
+  type: object
+  required:
+    - method
+    - url
+  properties:
+    method:
+      type: string
+      description: HTTP メソッド
+      enum:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+    url:
+      type: string
+      description: リクエスト先 URL（allow_hosts に含まれるホストのみ許可）
+      format: uri
+    headers:
+      type: object
+      description: 追加リクエストヘッダー（機密情報は含めない）
+      additionalProperties:
+        type: string
+    body:
+      type: object
+      description: リクエストボディ（JSON）
+    auth_env:
+      type: string
+      description: 認証トークンを保持する環境変数名（値そのものは受け取らない）
+    max_response_bytes:
+      type: integer
+      description: レスポンスボディ受信上限バイト数
+      minimum: 1
+      maximum: 10485760
+      default: 1048576
+
+output_schema:
+  type: object
+  required:
+    - status_code
+  properties:
+    status_code:
+      type: integer
+      description: HTTP ステータスコード
+    headers:
+      type: object
+      description: レスポンスヘッダー
+      additionalProperties:
+        type: string
+    body:
+      type: object
+      description: レスポンスボディ（JSON）
+    body_text:
+      type: string
+      description: レスポンスボディ（テキスト）
+    truncated:
+      type: boolean
+      description: max_response_bytes で切り詰めた場合 true
+
+execution:
+  type: http
+  allow_hosts:
+    - api.example.com
+    - internal.example.local
+  tls_verify: true
+  follow_redirects: false
+  max_redirects: 0
+
+permissions:
+  network: true
+  allow_hosts:
+    - api.example.com
+    - internal.example.local
+  read: false
+  write: false
+
+timeout:
+  seconds: 30
+  action: abort
+
+errors:
+  - code: HOST_NOT_ALLOWED
+    description: allow_hosts 外のホストへのリクエスト試行。403 を返して即時終了する。
+  - code: AUTH_ENV_NOT_FOUND
+    description: auth_env に指定した環境変数が存在しない。401 を返す。
+  - code: INVALID_URL
+    description: URL の形式が不正。400 を返して実行前に終了する。
+  - code: TLS_ERROR
+    description: TLS 検証失敗。502 を返す。
+  - code: RESPONSE_TOO_LARGE
+    description: レスポンスが max_response_bytes を超過。413 を返す。
+  - code: TIMEOUT
+    description: seconds 超過時にリクエストを中断し 408 を返す。
+  - code: CONNECTION_ERROR
+    description: 接続失敗。502 を返してログに記録する。
